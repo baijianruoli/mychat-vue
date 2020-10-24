@@ -19,6 +19,7 @@
                          reserve-keyword
                          placeholder="请输入姓名关键字"
                          :remote-method="remoteMethod"
+                         @change="searchChange"
                          >
                      <el-option
                              v-for="item in options"
@@ -91,8 +92,17 @@
                     <div @click=""  style="cursor: pointer;">
                         <i class="el-icon-picture-outline-round" style="height: 34px;width: 44px;font-size: 34px"></i>
                     </div>
-                    <el-input v-model="msg" placeholder="随便聊聊吧~~"></el-input>
-                    <div @click="send" style="cursor: pointer;">
+                <el-autocomplete
+                        class="inline-input"
+                        v-model="msg"
+                        :fetch-suggestions="querySearch"
+                        placeholder="随便聊聊吧~~"
+                        :trigger-on-focus="false"
+                        size="large"
+                        style="width: 400px"
+                ></el-autocomplete>
+
+                <div @click="send" style="cursor: pointer;">
                         <i class="el-icon-s-promotion" style="height: 34px;width: 44px;font-size: 34px"></i>
                     </div>
             </div>
@@ -113,7 +123,7 @@
                         <el-input v-model="myRegister.name" autocomplete="off"></el-input>
                     </el-form-item>
                     <el-form-item label="密码" :label-width="formLabelWidth">
-                        <el-input v-model="myRegister.password" autocomplete="off"></el-input>
+                        <el-input v-model="myRegister.password" autocomplete="off" show-password></el-input>
                     </el-form-item>
                 </el-form>
                 <div slot="footer" class="dialog-footer">
@@ -126,7 +136,7 @@
                     <el-input v-model="myLogin.name" autocomplete="off"></el-input>
                 </el-form-item>
                 <el-form-item label="密码" :label-width="formLabelWidth">
-                    <el-input v-model="myLogin.password" autocomplete="off"></el-input>
+                    <el-input v-model="myLogin.password" autocomplete="off" show-password></el-input>
                 </el-form-item>
             </el-form>
             <div slot="footer" class="dialog-footer">
@@ -172,24 +182,75 @@
                 icon:sessionStorage.getItem("icon"),
                 infoMap:new Map(),
                 linkIndex:'all',
-                linkManList:[]
+                linkManList:[],
+                restaurants:[{
+                    "value":"嘟嘟噜",
+                    "id":1
+                },{
+                    "value":"等一会，我现在有事",
+                    "id":2
+                },{
+                    "value":"好的",
+                    "id":3
+                },{
+                    "value":"orz tql sto",
+                    "id":3
+                },]
             }
         },
-
+        //保持界面一直在最顶部
         updated() {
           let list=this.$refs.msgList
             list.scrollTop = list.scrollHeight;
         },
         watch:{
-          search(name,old)
-            {
-                this.$message.success(name+old)
-            }
+
         },
         created() {
 
         },
         methods:{
+            searchChange(msg)
+            {
+                if(msg!='')
+                {
+                    this.$message.success(msg)
+                    this.$confirm('确定加Ta为好友吗, 是否继续?', '提示', {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }).then(() => {
+                           //添加好友
+                        this.$http("/addFriend?name="+this.name+"&friendName="+msg).then(res=>{
+                            this.$message({
+                                type: 'success',
+                                message: '添加成功!'
+                            });
+                            //从前获取列表
+                            this.$http("/getFriendList?name="+this.name).then(res=>{
+                                this.linkManList=res.data.data
+                            })
+                        })
+
+                    }).catch(() => {
+
+                    });
+
+                }
+
+            },
+            //输入框提示
+            querySearch(queryString, cb) {
+                var restaurants = this.restaurants;
+                var results = queryString ? restaurants.filter(this.createFilter(queryString)) : restaurants;
+                // 调用 callback 返回建议列表的数据
+                cb(results);
+            },
+            createFilter(queryString) {
+                return (restaurant) => {
+                    return (restaurant.value.toLowerCase().indexOf(queryString.toLowerCase()) === 0);
+                };
+            },
             linkMsg(name)
             {
                 return 1;
@@ -213,14 +274,14 @@
             {
                 if(query=='')
                     return
-              this.$http("/searchByName?name="+query).then(res=>{
+              this.$http("/searchByName?searchName="+query+"&name="+this.name).then(res=>{
                   this.options=res.data.data
               })
             },
             //登录
            login()
             {
-                socket= new WebSocket("ws://192.168.43.2:8002/hello")
+                socket= new WebSocket("ws://localhost:8002/hello")
                 setTimeout(()=>{},1000)
                 socket.onmessage =this.getMessage
                 socket.onopen=this.open
@@ -264,20 +325,21 @@
                     method: "post",
                     data: this.myRegister
                 }).then(res=>{
+                    console.log(res)
                     if(res.data.code==0)
                     {
                         this.$message.success("注册成功")
+                        this.myLogin.name=this.myRegister.name
+                        this.myLogin.password=this.myRegister.password
+                        this.myRegister.password=''
+                        this.myRegister.name=''
+                        this.innerVisible=false
                     }
                     else
                     {
-                        this.$message.error("注册失败")
+                        this.$message.error("账号已经被注册")
                     }
 
-                    this.myLogin.name=this.myRegister.name
-                    this.myLogin.password=this.myRegister.password
-                    this.myRegister.password=''
-                    this.myRegister.name=''
-                    this.innerVisible=false
                 })
             },
             //打开登录界面
@@ -330,6 +392,7 @@
             {
 
             },
+            //发送信息
             send()
             {
                 if(socket.readyState==WebSocket.OPEN)
@@ -593,6 +656,7 @@
         align-items: center;
         padding: 0px 20px;
         border-bottom-right-radius: 10px;
+        justify-content: center;
     }
     .title{
         display: flex;

@@ -5,7 +5,6 @@
             <el-image class="avatar" style="width: 60px; height: 60px; border-radius: 30px" :src="icon"></el-image>
             <div class="onlineStatus">
                 <div class="online"></div>
-<!--                <div></div>-->
             </div>
         </div>
         <div class="functionBar">
@@ -36,7 +35,7 @@
              </div>
              <div class="linkmanList">
                  <div class="linkman" :class="{activeLink:linkIndex=='all'}" @click="changeLink('all')">
-                     <img style="width: 48px; height: 48px; border-radius: 24px" :src="messageList.length==0?'':messageList[messageList.length-1].icon" >
+                     <img style="width: 48px; height: 48px; border-radius: 24px" :src="messageList.length==0?'https://liqiqip.oss-cn-beijing.aliyuncs.com/2020-07-07/763c1d53-db04-4b07-8e7d-12a56bcbe679_66eaed2ccf8d7a4f4ec2e433905de386.jpg':messageList[messageList.length-1].icon" >
                      <div class="containerman">
                          <div class="name">
                              <p class="name-item">{{messageList.length==0?'':messageList[messageList.length-1].name}} ：</p>
@@ -61,7 +60,10 @@
         <div class="chat">
             <div class="headerBar">
                 <h2>mychat</h2>
-                <div>
+                <div v-if="linkIndex!='all'&&getManFlag" style="cursor: pointer" @click="deleteFriend">
+                    <i class="el-icon-delete" style="height: 30px;width: 30px;font-size: 30px"></i>
+                </div>
+                <div v-if="">
 
                 </div>
             </div>
@@ -85,13 +87,22 @@
                 </div>
             </div>
             <div class="charInput" v-if="id!=''">
-                <div >
 
-                </div>
-
-                    <div @click=""  style="cursor: pointer;">
-                        <i class="el-icon-picture-outline-round" style="height: 34px;width: 44px;font-size: 34px"></i>
+<!--                表情-->
+                <el-popover
+                        placement="top-start"
+                        title="表情"
+                        width="300"
+                        trigger="hover"
+                          >
+                    <div style="display: flex;flex-wrap: wrap">
+                        <div v-for="(item,index) in faceList" style="font-size: 20px;cursor: pointer;" @click="addFace(item)">{{item}}</div>
                     </div>
+                    <i class="el-icon-picture-outline-round" style="height: 34px;width: 44px;font-size: 34px" slot="reference"></i>
+                </el-popover>
+<!--                图片-->
+                    <i class="el-icon-picture-outline" style="cursor: pointer;height: 34px;width: 44px;font-size: 34px;margin: 13px"></i>
+<!--                聊天框-->
                 <el-autocomplete
                         class="inline-input"
                         v-model="msg"
@@ -102,7 +113,7 @@
                         style="width: 400px"
                 ></el-autocomplete>
 
-                <div @click="send" style="cursor: pointer;">
+                <div @click="send" style="cursor: pointer;" >
                         <i class="el-icon-s-promotion" style="height: 34px;width: 44px;font-size: 34px"></i>
                     </div>
             </div>
@@ -154,15 +165,16 @@
 <script>
     import request from "../network/request";
     import Vue from "vue";
+    const appData = require("@/assets/emojis.json");
     var socket=''
     export default {
         name: "user",
         data(){
             return {
+                faceList: [],
                 myRegister: {
                     name: '',
                     password:''
-
                 },
                 myLogin:{
                     name: '',
@@ -207,14 +219,62 @@
 
         },
         created() {
-
+            for (let i in appData) {
+                this.faceList.push(appData[i].char);
+            }
         },
         methods:{
+            //获取用户状态
+            getManFlag()
+            {
+                let flag=0
+                this.linkManList.forEach(res=>{
+                    if(res.name==this.linkIndex)
+                    {
+                        if(res.flag==1)
+                            flag=1;
+                    }
+                })
+                if(flag==1)
+                    return true
+                else
+                    return false
+            },
+            //添加表情
+            addFace(res)
+            {
+                this.msg=this.msg+res;
+            },
+            //删除好友
+            deleteFriend()
+            {
+                this.$confirm(`确定删除${this.linkIndex}好友吗, 是否继续?`, '提示', {
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                }).then(() => {
+                    //添加好友
+                    this.$http("/removeFriend?name="+this.name+"&friendName="+this.linkIndex).then(res=>{
+                        this.$message({
+                            type: 'success',
+                            message: '删除成功!'
+                        });
+                        //从前获取列表
+                        this.$http("/getFriendList?name="+this.name).then(res=>{
+                            this.linkManList=res.data.data
+                        })
+                    })
+                    this.linkIndex='all'
+
+                }).catch(() => {
+
+                });
+            },
+            //添加好友
             searchChange(msg)
             {
                 if(msg!='')
                 {
-                    this.$message.success(msg)
                     this.$confirm('确定加Ta为好友吗, 是否继续?', '提示', {
                         confirmButtonText: '确定',
                         cancelButtonText: '取消',
@@ -231,6 +291,7 @@
                                 this.linkManList=res.data.data
                             })
                         })
+                        this.search=''
 
                     }).catch(() => {
 
@@ -361,9 +422,9 @@
                     list.push(ev)
                     this.infoMap.set(ev.acceptId,list);
                     this.$set(this.infoMap,ev.acceptId,list)
-
                     console.log( this.infoMap.get(ev.acceptId).length)
                 }
+                //发给别人
                 else
                 {
                     let list=this.infoMap.get(ev.name);
@@ -371,11 +432,13 @@
                         list=[]
                     list.push(ev)
                     this.infoMap.set(ev.name,list);
+                    if(ev.friendFlag==0)
+                    {
+                        this.linkManList.push(ev)
+                    }
                     this.$set(this.infoMap,ev.name,list)
-
                     console.log( this.infoMap.get(ev.name).length)
                 }
-
                if(ev.acceptId=='all')
                {
                    console.log('all')
